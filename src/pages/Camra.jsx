@@ -79,9 +79,7 @@ function RatingPopup({ isOpen, onClose, capturedImage }) {
               {ratings.map((rating, index) => (
                 <div
                   key={rating.feature}
-                  className={`flex justify-between items-center transform transition-all duration-300 delay-${
-                    index * 100
-                  }`}
+                  className={`flex justify-between items-center transform transition-all duration-300`}
                   style={{ animationDelay: `${index * 100}ms` }}
                 >
                   <span className="text-white/90 font-medium">
@@ -92,13 +90,12 @@ function RatingPopup({ isOpen, onClose, capturedImage }) {
                       {[...Array(10)].map((_, i) => (
                         <div
                           key={i}
-                          className={`w-2 h-2 rounded-full transition-all duration-300 delay-${
-                            i * 50
-                          } ${
+                          className={`w-2 h-2 rounded-full transition-all duration-300 ${
                             i < rating.score
                               ? "bg-gradient-to-r from-pink-400 to-purple-500"
                               : "bg-white/20"
                           }`}
+                          style={{ animationDelay: `${i * 50}ms` }}
                         />
                       ))}
                     </div>
@@ -162,103 +159,36 @@ export default function CameraPage() {
   const [capturedImage, setCapturedImage] = useState(null);
   const [showPopup, setShowPopup] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [cameraError, setCameraError] = useState(null);
+  const [permissionGranted, setPermissionGranted] = useState(false);
 
-  useEffect(() => {
-    startCamera();
-    return () => {
-      stopCamera();
-    };
-  }, []);
-
-  const startCamera = async () => {
+  const requestCameraPermission = async () => {
     try {
-      setCameraError(null);
-      console.log("Requesting camera permission...");
+      console.log("🎥 Requesting camera access...");
 
-      // Check if camera is available
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error("Camera not supported by this browser");
-      }
-
-      // First check current permissions
-      try {
-        const permissionStatus = await navigator.permissions.query({
-          name: "camera",
-        });
-        console.log("Camera permission status:", permissionStatus.state);
-      } catch (e) {
-        console.log("Permission API not supported");
-      }
-
-      // Request front camera with high priority
-      const constraints = {
+      const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: "user", // Front camera
-          width: { ideal: 720, min: 320 },
-          height: { ideal: 1280, min: 480 },
-          frameRate: { ideal: 30, min: 15 },
+          facingMode: "user",
+          width: { ideal: 720 },
+          height: { ideal: 1280 },
         },
         audio: false,
-      };
+      });
 
-      console.log("Requesting camera access...");
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log("✅ Camera permission granted!");
+      setPermissionGranted(true);
 
-      console.log("Camera access granted!");
-      console.log("Stream details:", stream.getVideoTracks()[0].getSettings());
-
-      if (videoRef.current && stream) {
+      if (videoRef.current) {
         videoRef.current.srcObject = stream;
 
-        // Wait for video to load and start playing
         videoRef.current.onloadedmetadata = () => {
-          console.log("Video metadata loaded");
-          videoRef.current
-            .play()
-            .then(() => {
-              console.log("Video started playing");
-              setIsStreaming(true);
-            })
-            .catch((error) => {
-              console.error("Error playing video:", error);
-              setCameraError("Failed to start video playback");
-            });
-        };
-
-        // Handle video errors
-        videoRef.current.onerror = (error) => {
-          console.error("Video error:", error);
-          setCameraError("Video playback error");
+          videoRef.current.play();
+          setIsStreaming(true);
+          console.log("🔴 Live camera started!");
         };
       }
     } catch (error) {
-      console.error("Camera access error:", error);
-
-      // Handle different types of errors
-      if (error.name === "NotAllowedError") {
-        setCameraError(
-          "Camera permission denied. Please allow camera access and refresh the page."
-        );
-      } else if (error.name === "NotFoundError") {
-        setCameraError(
-          "No camera found. Please connect a camera and try again."
-        );
-      } else if (error.name === "NotReadableError") {
-        setCameraError("Camera is being used by another application.");
-      } else if (error.name === "OverconstrainedError") {
-        setCameraError("Camera doesn't support the required settings.");
-      } else {
-        setCameraError(`Camera error: ${error.message}`);
-      }
-    }
-  };
-
-  const stopCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const tracks = videoRef.current.srcObject.getTracks();
-      tracks.forEach((track) => track.stop());
-      videoRef.current.srcObject = null;
+      console.error("❌ Camera error:", error);
+      setPermissionGranted(false);
       setIsStreaming(false);
     }
   };
@@ -273,29 +203,20 @@ export default function CameraPage() {
     const context = canvas.getContext("2d");
 
     if (context) {
-      // Set canvas dimensions to match video
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
 
-      // Draw the current video frame
+      // Draw current video frame
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // Convert to image data URL
+      // Get image data (but don't save)
       const imageDataUrl = canvas.toDataURL("image/png", 0.9);
       setCapturedImage(imageDataUrl);
 
-      // Create download link (optional - saves to downloads)
-      const link = document.createElement("a");
-      link.download = `selfie-${Date.now()}.png`;
-      link.href = imageDataUrl;
-
-      // Simulate capture effect
+      // Show popup after capture effect
       setTimeout(() => {
         setIsCapturing(false);
         setShowPopup(true);
-
-        // Uncomment to auto-download
-        // link.click()
       }, 500);
     }
   };
@@ -333,133 +254,113 @@ export default function CameraPage() {
 
       {/* Main content */}
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-4">
-        {/* Camera container */}
-        <div className="relative mb-8 transform transition-all duration-700 hover:scale-105">
-          {/* Glowing border effect */}
-          <div className="absolute -inset-1 bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 rounded-3xl blur opacity-75 animate-pulse"></div>
-
-          {/* Camera frame */}
-          <div className="relative bg-black/20 backdrop-blur-sm rounded-3xl p-2 border border-white/20">
-            <div className="relative w-72 h-96 md:w-80 md:h-[28rem] rounded-2xl overflow-hidden bg-black">
-              {/* Video element */}
-              {cameraError ? (
-                <div className="w-full h-full flex items-center justify-center text-white text-center p-4">
-                  <div className="space-y-4">
-                    <div className="text-6xl mb-4 animate-bounce">📷</div>
-                    <p className="text-lg font-semibold text-red-300">
-                      Camera Access Needed
-                    </p>
-                    <p className="text-sm text-white/80 max-w-xs mx-auto leading-relaxed">
-                      {cameraError}
-                    </p>
-
-                    {cameraError.includes("permission denied") && (
-                      <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-lg p-3 mt-4">
-                        <p className="text-xs text-yellow-200">
-                          📝 <strong>How to enable camera:</strong>
-                          <br />
-                          1. Click the camera icon in your browser's address bar
-                          <br />
-                          2. Select "Allow" for camera access
-                          <br />
-                          3. Refresh this page
-                        </p>
-                      </div>
-                    )}
-
-                    <button
-                      onClick={startCamera}
-                      className="mt-4 px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-600 rounded-xl text-sm font-semibold hover:from-pink-600 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 shadow-lg"
-                    >
-                      🔄 Try Again
-                    </button>
-                  </div>
-                </div>
-              ) : !isStreaming ? (
-                <div className="w-full h-full flex items-center justify-center text-white">
-                  <div className="text-center space-y-4">
-                    <div className="text-4xl animate-spin">📷</div>
-                    <p className="text-lg">Starting Camera...</p>
-                    <div className="flex space-x-1 justify-center">
-                      <div className="w-2 h-2 bg-pink-400 rounded-full animate-bounce"></div>
-                      <div
-                        className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
-                        style={{ animationDelay: "0.1s" }}
-                      ></div>
-                      <div
-                        className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
-                        style={{ animationDelay: "0.2s" }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              {/* Capture flash effect */}
-              {isCapturing && (
-                <div className="absolute inset-0 bg-white animate-ping opacity-80"></div>
-              )}
-
-              {/* Camera overlay effects */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-black/10"></div>
-
-              {/* Corner decorations */}
-              <div className="absolute top-2 left-2 w-4 h-4 border-l-2 border-t-2 border-white/50 rounded-tl-lg"></div>
-              <div className="absolute top-2 right-2 w-4 h-4 border-r-2 border-t-2 border-white/50 rounded-tr-lg"></div>
-              <div className="absolute bottom-2 left-2 w-4 h-4 border-l-2 border-b-2 border-white/50 rounded-bl-lg"></div>
-              <div className="absolute bottom-2 right-2 w-4 h-4 border-r-2 border-b-2 border-white/50 rounded-br-lg"></div>
-
-              {/* Live indicator */}
-              {isStreaming && (
-                <div className="absolute top-4 left-4 flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                  <span className="text-white text-xs font-medium">LIVE</span>
-                </div>
-              )}
+        {/* Camera permission request */}
+        {!permissionGranted && (
+          <div className="mb-8 text-center">
+            <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20 max-w-md">
+              <div className="text-6xl mb-4 animate-bounce">📸</div>
+              <h2 className="text-white text-2xl font-bold mb-4">
+                Camera Access Required
+              </h2>
+              <p className="text-white/80 mb-6">
+                Click below to start your live camera
+              </p>
+              <button
+                onClick={requestCameraPermission}
+                className="px-8 py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold text-lg rounded-full transform transition-all duration-300 hover:scale-110 hover:shadow-2xl hover:shadow-pink-500/50 active:scale-95"
+              >
+                🎥 Start Camera
+              </button>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Camera container */}
+        {permissionGranted && (
+          <div className="relative mb-8 transform transition-all duration-700 hover:scale-105">
+            {/* Glowing border effect */}
+            <div className="absolute -inset-1 bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 rounded-3xl blur opacity-75 animate-pulse"></div>
+
+            {/* Camera frame */}
+            <div className="relative bg-black/20 backdrop-blur-sm rounded-3xl p-2 border border-white/20">
+              <div className="relative w-72 h-96 md:w-80 md:h-[28rem] rounded-2xl overflow-hidden bg-black">
+                {/* Video element */}
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className={`w-full h-full object-cover transition-all duration-500 ${
+                    isCapturing ? "brightness-150 contrast-125" : ""
+                  }`}
+                />
+
+                {/* Capture flash effect */}
+                {isCapturing && (
+                  <div className="absolute inset-0 bg-white animate-ping opacity-80"></div>
+                )}
+
+                {/* Camera overlay effects */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-black/10"></div>
+
+                {/* Corner decorations */}
+                <div className="absolute top-2 left-2 w-4 h-4 border-l-2 border-t-2 border-white/50 rounded-tl-lg"></div>
+                <div className="absolute top-2 right-2 w-4 h-4 border-r-2 border-t-2 border-white/50 rounded-tr-lg"></div>
+                <div className="absolute bottom-2 left-2 w-4 h-4 border-l-2 border-b-2 border-white/50 rounded-bl-lg"></div>
+                <div className="absolute bottom-2 right-2 w-4 h-4 border-r-2 border-b-2 border-white/50 rounded-br-lg"></div>
+
+                {/* Live indicator */}
+                {isStreaming && (
+                  <div className="absolute top-4 left-4 flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                    <span className="text-white text-xs font-medium">LIVE</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Capture button */}
-        <button
-          onClick={capturePhoto}
-          disabled={!isStreaming || isCapturing || cameraError}
-          className="relative group px-8 py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold text-lg rounded-full transform transition-all duration-300 hover:scale-110 hover:shadow-2xl hover:shadow-pink-500/50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-4 focus:ring-pink-500/30"
-        >
-          {/* Button glow effect */}
-          <div className="absolute -inset-1 bg-gradient-to-r from-pink-500 to-purple-600 rounded-full blur opacity-0 group-hover:opacity-75 transition-opacity duration-300"></div>
+        {isStreaming && (
+          <button
+            onClick={capturePhoto}
+            disabled={isCapturing}
+            className="relative group px-8 py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold text-lg rounded-full transform transition-all duration-300 hover:scale-110 hover:shadow-2xl hover:shadow-pink-500/50 active:scale-95 disabled:opacity-50 focus:outline-none focus:ring-4 focus:ring-pink-500/30"
+          >
+            {/* Button glow effect */}
+            <div className="absolute -inset-1 bg-gradient-to-r from-pink-500 to-purple-600 rounded-full blur opacity-0 group-hover:opacity-75 transition-opacity duration-300"></div>
 
-          <span className="relative flex items-center space-x-2">
-            <span
-              className={`transition-transform duration-300 ${
-                isCapturing ? "animate-spin" : "group-hover:rotate-12"
-              }`}
-            >
-              📸
+            <span className="relative flex items-center space-x-2">
+              <span
+                className={`transition-transform duration-300 ${
+                  isCapturing ? "animate-spin" : "group-hover:rotate-12"
+                }`}
+              >
+                📸
+              </span>
+              <span>{isCapturing ? "Capturing..." : "Capture"}</span>
+              <span
+                className={`transition-transform duration-300 ${
+                  isCapturing ? "animate-spin" : "group-hover:-rotate-12"
+                }`}
+              >
+                ✨
+              </span>
             </span>
-            <span>{isCapturing ? "Capturing..." : "Capture"}</span>
-            <span
-              className={`transition-transform duration-300 ${
-                isCapturing ? "animate-spin" : "group-hover:-rotate-12"
-              }`}
-            >
-              ✨
-            </span>
-          </span>
-        </button>
+          </button>
+        )}
 
         {/* Status text */}
         <p className="mt-4 text-white/70 text-center animate-pulse text-lg">
-          {cameraError ? (
-            <span className="text-red-300">🚫 Camera permission required</span>
-          ) : !isStreaming ? (
+          {!permissionGranted ? (
             <span className="text-yellow-300">
-              🔄 Connecting to front camera...
+              🎯 Ready to start your camera!
             </span>
+          ) : !isStreaming ? (
+            <span className="text-blue-300">🔄 Loading camera...</span>
           ) : (
-            <span className="text-green-300">
-              ✨ Ready to capture! Strike a pose! 💫
-            </span>
+            <span className="text-green-300">✨ Strike a pose! 💫</span>
           )}
         </p>
       </div>
